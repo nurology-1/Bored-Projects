@@ -1,1 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Editor | Bored Projects</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Mouse Memoirs', sans-serif;
+        }
+        .sidebar {
+            /* The side navigation bar */
+            width: 200px; /* Set a specific width */
+            position: fixed; /* Fixed position */
+            z-index: 1; /* Stay on top */
+            top: 0; /* Stay at the top */
+            left: 0;
+            height: 100%;
+            overflow-x: hidden;
+            padding-top: 20px;
+        }
+        textarea {
+            resize: none;
+            outline: none;
+            border: none;
+        }
+    </style>
+</head>
+<body class="bg-gray-200 text-gray-800 h-screen flex flex-col">
 
+    <!-- Main container for the entire layout -->
+    <div class="flex flex-1 flex-col md:flex-row">
+
+        <!-- Sidebar on the left -->
+        <aside class="w-full md:w-64 bg-gray-300 p-4 flex flex-col items-center space-y-4 shadow-lg md:h-screen">
+            <button id="open-file-btn" class="w-full py-3 px-6 rounded-lg bg-gray-200 hover:bg-gray-100 transition-colors shadow-md">
+                Open File
+            </button>
+            <button id="save-btn" class="w-full py-3 px-6 rounded-lg bg-gray-200 hover:bg-gray-100 transition-colors shadow-md">
+                Save
+            </button>
+            <button id="save-as-btn" class="w-full py-3 px-6 rounded-lg bg-gray-200 hover:bg-gray-100 transition-colors shadow-md">
+                Save As
+            </button>
+        </aside>
+
+        <!-- Main content area -->
+        <main class="flex-1 p-8 flex flex-col justify-center items-center">
+            <div class="w-full h-full bg-gray-100 rounded-lg shadow-inner flex justify-center items-center">
+                <textarea id="editor" class="w-full h-full p-4 bg-transparent text-lg text-gray-800"></textarea>
+            </div>
+        </main>
+
+    </div>
+
+    <!-- Hidden file input for "Open File" -->
+    <input type="file" id="file-input" class="hidden">
+
+    <!-- Custom Modal for Save As -->
+    <div id="save-as-modal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white p-6 rounded-lg shadow-lg w-80">
+            <h2 class="text-xl font-bold mb-4">Save As</h2>
+            <input type="text" id="modal-filename-input" class="w-full p-2 mb-4 border border-gray-300 rounded-lg" placeholder="Enter file name...">
+            <div class="flex justify-end space-x-2">
+                <button id="modal-cancel-btn" class="py-2 px-4 rounded-lg bg-gray-200 hover:bg-gray-300 transition-colors">
+                    Cancel
+                </button>
+                <button id="modal-save-btn" class="py-2 px-4 rounded-lg bg-gray-800 text-white hover:bg-gray-700 transition-colors">
+                    Save
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Custom Modal for Messages/Errors -->
+    <div id="message-modal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white p-6 rounded-lg shadow-lg w-80">
+            <h2 class="text-xl font-bold mb-4" id="message-modal-title"></h2>
+            <p id="message-modal-content" class="mb-4"></p>
+            <div class="flex justify-end">
+                <button id="message-modal-ok-btn" class="py-2 px-4 rounded-lg bg-gray-800 text-white hover:bg-gray-700 transition-colors">
+                    OK
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer for file information -->
+    <footer class="bg-gray-300 p-4 flex flex-col md:flex-row justify-between items-center text-sm font-medium">
+        <p id="file-info-name" class="mb-2 md:mb-0">[File Name].{FileExtension}</p>
+        <p id="file-info-path" class="mb-2 md:mb-0">[DirectoryPATH]</p>
+        <p id="file-info-size">File Size: (Size) (B, KB, MB, GB)</p>
+    </footer>
+
+    <script>
+        // Get references to DOM elements
+        const openFileBtn = document.getElementById('open-file-btn');
+        const saveBtn = document.getElementById('save-btn');
+        const saveAsBtn = document.getElementById('save-as-btn');
+        const fileInput = document.getElementById('file-input');
+        const editor = document.getElementById('editor');
+        const fileNameInfo = document.getElementById('file-info-name');
+        const filePathInfo = document.getElementById('file-info-path');
+        const fileSizeInfo = document.getElementById('file-info-size');
+        const saveAsModal = document.getElementById('save-as-modal');
+        const modalFilenameInput = document.getElementById('modal-filename-input');
+        const modalSaveBtn = document.getElementById('modal-save-btn');
+        const modalCancelBtn = document.getElementById('modal-cancel-btn');
+        const messageModal = document.getElementById('message-modal');
+        const messageModalTitle = document.getElementById('message-modal-title');
+        const messageModalContent = document.getElementById('message-modal-content');
+        const messageModalOkBtn = document.getElementById('message-modal-ok-btn');
+
+        let currentFile = null;
+
+        // "Open File" functionality
+        openFileBtn.addEventListener('click', () => {
+            fileInput.click();
+        });
+
+        fileInput.addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            if (file) {
+                // Check if the file is a text file
+                if (!file.type.startsWith('text/')) {
+                    showMessageModal('Error', 'Please select a plain text file.');
+                    return;
+                }
+
+                currentFile = file;
+                const reader = new FileReader();
+
+                reader.onload = (e) => {
+                    try {
+                        editor.value = e.target.result;
+                        updateFileInfo(file);
+                    } catch (error) {
+                        showMessageModal('File Read Error', `Could not read the file: ${error.message}`);
+                    }
+                };
+                
+                reader.onerror = (e) => {
+                    showMessageModal('File Read Error', 'An error occurred while reading the file.');
+                };
+
+                reader.readAsText(file);
+            }
+        });
+
+        // "Save" functionality
+        saveBtn.addEventListener('click', () => {
+            if (currentFile) {
+                const text = editor.value;
+                const blob = new Blob([text], { type: 'text/plain' });
+                // Use the File System Access API if available, otherwise fall back to a download link
+                if ('showSaveFilePicker' in window) {
+                    showSaveFilePicker({
+                        suggestedName: currentFile.name
+                    }).then(handle => {
+                        return handle.createWritable();
+                    }).then(writable => {
+                        return writable.write(blob).then(() => writable.close());
+                    }).then(() => {
+                        console.log('File saved successfully.');
+                    }).catch(err => {
+                        console.error('File saving failed:', err);
+                        showMessageModal('Save Failed', 'Could not save the file.');
+                    });
+                } else {
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = currentFile.name;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                }
+            } else {
+                // If there's no current file, treat it as a "Save As" operation
+                showSaveAsModal();
+            }
+        });
+
+        // "Save As" functionality
+        saveAsBtn.addEventListener('click', () => {
+            showSaveAsModal();
+        });
+
+        function showSaveAsModal() {
+            saveAsModal.classList.remove('hidden');
+            modalFilenameInput.focus();
+        }
+
+        modalCancelBtn.addEventListener('click', () => {
+            saveAsModal.classList.add('hidden');
+            modalFilenameInput.value = '';
+        });
+
+        modalSaveBtn.addEventListener('click', () => {
+            const filename = modalFilenameInput.value.trim();
+            if (filename) {
+                const text = editor.value;
+                const blob = new Blob([text], { type: 'text/plain' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                
+                // Update file info for the new file
+                currentFile = new File([blob], filename);
+                updateFileInfo(currentFile);
+
+                // Hide the modal
+                saveAsModal.classList.add('hidden');
+                modalFilenameInput.value = '';
+            }
+        });
+        
+        // Show the generic message modal
+        function showMessageModal(title, content) {
+            messageModalTitle.textContent = title;
+            messageModalContent.textContent = content;
+            messageModal.classList.remove('hidden');
+        }
+
+        // Hide the generic message modal
+        messageModalOkBtn.addEventListener('click', () => {
+            messageModal.classList.add('hidden');
+        });
+
+        // Function to update the footer with file information
+        function updateFileInfo(file) {
+            fileNameInfo.textContent = `${file.name}`;
+            // The directory path is not available from the browser for security reasons
+            filePathInfo.textContent = '[DirectoryPATH]';
+            const sizeInBytes = file.size;
+            let size = sizeInBytes;
+            let unit = 'B';
+            if (size > 1024) {
+                size /= 1024;
+                unit = 'KB';
+            }
+            if (size > 1024) {
+                size /= 1024;
+                unit = 'MB';
+            }
+            if (size > 1024) {
+                size /= 1024;
+                unit = 'GB';
+            }
+            fileSizeInfo.textContent = `File Size: ${size.toFixed(2)} ${unit}`;
+        }
+    </script>
+
+</body>
+</html>
